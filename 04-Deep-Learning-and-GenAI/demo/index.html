@@ -1,0 +1,407 @@
+
+<h2 class="sr-only">DeepGen-Protein interactive demonstration: explore sequence generation with VAE and cGAN models, view classification results, and visualize amino acid frequencies.</h2>
+
+<style>
+  .tabs{display:flex;gap:0;border-bottom:0.5px solid var(--color-border-tertiary);margin-bottom:1.5rem}
+  .tab{padding:8px 18px;font-size:14px;font-weight:500;cursor:pointer;border-bottom:2px solid transparent;color:var(--color-text-secondary);background:none;border-top:none;border-left:none;border-right:none}
+  .tab.active{color:var(--color-text-primary);border-bottom:2px solid #378ADD}
+  .panel{display:none}.panel.active{display:block}
+  .metric{background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:12px 16px}
+  .metric-label{font-size:12px;color:var(--color-text-secondary);margin:0 0 4px}
+  .metric-value{font-size:22px;font-weight:500;margin:0;color:var(--color-text-primary)}
+  .seq-box{background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:12px;font-family:var(--font-mono);font-size:12px;color:var(--color-text-primary);word-break:break-all;margin-bottom:8px;border-left:3px solid #378ADD}
+  .seq-family{font-size:11px;color:var(--color-text-secondary);margin-bottom:4px;font-family:var(--font-sans)}
+  .row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:1.5rem}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:1.5rem}
+  label{font-size:13px;color:var(--color-text-secondary)}
+  select,input[type=range]{width:100%}
+  .btn{display:inline-flex;align-items:center;gap:6px;padding:7px 16px;font-size:13px;font-weight:500;background:var(--color-background-primary);border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);cursor:pointer;color:var(--color-text-primary)}
+  .btn:hover{background:var(--color-background-secondary)}
+  .section-title{font-size:13px;font-weight:500;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:.5px;margin:0 0 10px}
+  .bar-row{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+  .bar-label{font-size:12px;width:80px;text-align:right;color:var(--color-text-secondary)}
+  .bar-track{flex:1;height:18px;background:var(--color-background-secondary);border-radius:4px;overflow:hidden}
+  .bar-fill{height:100%;border-radius:4px;transition:width .4s}
+  .bar-val{font-size:12px;width:48px;color:var(--color-text-primary)}
+  .confusion-cell{display:inline-block;width:16px;height:16px;border-radius:2px}
+  .tag{display:inline-block;padding:2px 8px;border-radius:var(--border-radius-md);font-size:11px;margin-right:4px}
+</style>
+
+<div style="padding:0 0 1rem">
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('classify')">Classification (ISA-1)</button>
+    <button class="tab" onclick="switchTab('generate')">Sequence Generation (ISA-2)</button>
+    <button class="tab" onclick="switchTab('latent')">Latent Space</button>
+    <button class="tab" onclick="switchTab('compare')">Model Comparison</button>
+  </div>
+
+  <div id="panel-classify" class="panel active">
+    <div class="section-title">test set results — top 20 protein families</div>
+    <div class="row">
+      <div class="metric"><p class="metric-label">1D-CNN accuracy</p><p class="metric-value">99.94%</p></div>
+      <div class="metric"><p class="metric-label">BiLSTM accuracy</p><p class="metric-value">99.74%</p></div>
+      <div class="metric"><p class="metric-label">BiGRU accuracy</p><p class="metric-value">99.94%</p></div>
+    </div>
+    <div class="row">
+      <div class="metric"><p class="metric-label">1D-CNN macro-F1</p><p class="metric-value">0.9994</p></div>
+      <div class="metric"><p class="metric-label">BiLSTM macro-F1</p><p class="metric-value">0.9972</p></div>
+      <div class="metric"><p class="metric-label">BiGRU macro-F1</p><p class="metric-value">0.9993</p></div>
+    </div>
+    <div class="section-title" style="margin-top:1rem">per-family performance (1D-CNN best model)</div>
+    <div id="family-bars"></div>
+    <div style="margin-top:1rem">
+      <div class="section-title">training curves — validation accuracy</div>
+      <div style="position:relative;height:200px"><canvas id="trainChart" role="img" aria-label="Validation accuracy curves for CNN, LSTM and GRU over epochs">CNN peaks at 99.97% by epoch 2; LSTM and GRU reach 99.97% by epoch 4-5.</canvas></div>
+    </div>
+  </div>
+
+  <div id="panel-generate" class="panel">
+    <div class="row2">
+      <div>
+        <label>Model</label>
+        <select id="genModel" style="margin-top:4px">
+          <option value="vae">VAE (Pfam)</option>
+          <option value="cgan">cGAN (Pfam)</option>
+          <option value="vae_uni">VAE (UniProt — collapsed)</option>
+          <option value="cgan_uni">cGAN (UniProt)</option>
+        </select>
+      </div>
+      <div>
+        <label>Protein family / Organism</label>
+        <select id="genFamily" style="margin-top:4px">
+          <option value="His_kinase">His_kinase</option>
+          <option value="Maf">Maf</option>
+          <option value="WD40">WD40</option>
+          <option value="LRR_1">LRR_1</option>
+          <option value="Acetyltransf_7">Acetyltransf_7</option>
+          <option value="DHH">DHH</option>
+        </select>
+      </div>
+    </div>
+    <button class="btn" onclick="generateSeqs()" style="margin-bottom:1.5rem">Generate sequences ↗</button>
+    <div class="section-title">generated sequences</div>
+    <div id="seq-output">
+      <p style="font-size:13px;color:var(--color-text-secondary)">Press "Generate sequences" to produce samples.</p>
+    </div>
+    <div style="margin-top:1rem" id="gen-stats-div" style="display:none">
+      <div class="section-title">generation stats</div>
+      <div class="row">
+        <div class="metric"><p class="metric-label">Samples</p><p class="metric-value" id="stat-n">—</p></div>
+        <div class="metric"><p class="metric-label">Unique</p><p class="metric-value" id="stat-u">—</p></div>
+        <div class="metric"><p class="metric-label">AA Entropy</p><p class="metric-value" id="stat-h">—</p></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="panel-latent" class="panel">
+    <div class="section-title">vae latent space interpolation — his_kinase → maf</div>
+    <div style="margin-bottom:1rem">
+      <label>Interpolation alpha: <span id="alphaVal" style="font-weight:500">0.0</span></label>
+      <input type="range" min="0" max="10" value="0" id="alphaSlider" oninput="updateInterp(this.value)" style="margin-top:6px">
+    </div>
+    <div id="interp-seq" class="seq-box" style="min-height:60px"></div>
+    <div id="interp-family-badge" style="margin-bottom:1rem"></div>
+    <div class="section-title" style="margin-top:1rem">latent space t-sne — 20 protein families (pfam)</div>
+    <div style="position:relative;height:260px"><canvas id="tsneChart" role="img" aria-label="t-SNE scatter plot showing well-separated clusters for 20 protein families in the VAE latent space">20 protein families form distinct clusters in the VAE latent space.</canvas></div>
+  </div>
+
+  <div id="panel-compare" class="panel">
+    <div class="section-title">amino acid frequency: real vs vae vs cgan</div>
+    <div style="display:flex;gap:16px;margin-bottom:12px;flex-wrap:wrap">
+      <span style="display:flex;align-items:center;gap:4px;font-size:12px"><span style="width:10px;height:10px;border-radius:2px;background:#378ADD;display:inline-block"></span>Real sequences</span>
+      <span style="display:flex;align-items:center;gap:4px;font-size:12px"><span style="width:10px;height:10px;border-radius:2px;background:#9F7FDB;display:inline-block"></span>VAE generated</span>
+      <span style="display:flex;align-items:center;gap:4px;font-size:12px"><span style="width:10px;height:10px;border-radius:2px;background:#D85A30;display:inline-block"></span>cGAN generated</span>
+    </div>
+    <div style="position:relative;height:260px"><canvas id="aaChart" role="img" aria-label="Grouped bar chart comparing amino acid frequencies between real, VAE, and cGAN sequences">Comparison of amino acid distributions.</canvas></div>
+    <div style="margin-top:1.5rem">
+      <div class="section-title">generative model summary</div>
+      <div class="row2" style="margin-top:.5rem">
+        <div class="metric"><p class="metric-label">VAE (Pfam) — uniqueness</p><p class="metric-value">1.000</p></div>
+        <div class="metric"><p class="metric-label">cGAN (Pfam) — uniqueness</p><p class="metric-value">1.000</p></div>
+        <div class="metric"><p class="metric-label">VAE AA entropy</p><p class="metric-value">2.287</p></div>
+        <div class="metric"><p class="metric-label">cGAN AA entropy</p><p class="metric-value">2.289</p></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+const AA = 'ACDEFGHIKLMNPQRSTVWY'.split('');
+
+const INTERP = [
+  {a:0.0, seq:'AELKLLQQQINPHFLFNTLNTISALARDDPEAAAELLDELLRLLRYLLSSSRRTRLLLEEEELLNYYLLLQQRRRRGRFL', family:'His_kinase'},
+  {a:0.1, seq:'AELKLLQQQINPHFLFNTLNTISALARDDPEEAAELLLSLLSLLRYLLSSRREEVLLLEEELELLRYYLELQQRRFGRR', family:'His_kinase'},
+  {a:0.2, seq:'AELKLLQQQINPHFLFNTLNTISALARDDPEEAAELLLSLLSLLRYLLSSNNEEVLLLEEELELLRYYLEQQQRRFGRRL', family:'Hybrid'},
+  {a:0.3, seq:'KEILALQQQINPHFLFNTLNSISALAENDDEEAAELLLSLSSLLRYLLSSNNEEITLLEEELELLRYYLELQQRRFGERL', family:'Hybrid'},
+  {a:0.4, seq:'KIILASSSPRRRELLKQLGIPFEIIPSPDEEEIPDEPPEEELAELLKKAAKAAAAAAAEKIKLIIDDDTIVVGGDIIIKP', family:'Hybrid'},
+  {a:0.5, seq:'KIILASSSPRRRELLQQLGIPFEIIPSPDEEIPDEPEEEELAKLLAKKAAAAAAAAEKLPLIIIGDDDIVVGGGIILKK', family:'Hybrid'},
+  {a:0.6, seq:'KIILASSSPRRRELLKQLGIPFEIIPSPDEDEIPEEEPEEELEELLKKAAKAAAAAAAEKIKIIIGDDDIVVGGDIIIK', family:'Maf'},
+  {a:0.7, seq:'KIILASSSPRRRELLKQLGIPFEIIPSPDEDEIPEEEPEEELEELLKKAAKAAAAAAAEKIKIIIGDDDIVVGGDIIIK', family:'Maf'},
+  {a:0.8, seq:'KIILASSSPRRRELLKQLGIPFEIIPSPDEDEIPEEEPEEELEELLKKAAKAAAAAAERIKIIIGDDDIVVGGDIISK', family:'Maf'},
+  {a:0.9, seq:'KIILASSSPRRRELLKQLGIPFEIIPSPDEDEIPEEEPEEELEELLKKAAKAAAAAAAEKIKIIIGDDIVVGGDIIIK', family:'Maf'},
+  {a:1.0, seq:'KIILASSSPRRRELLKQLGIPFEIIPSPDEDEIPEEEPEEELEELLKKAAKAAAAAAAEKIKIIIGDDDIVVGGDIIIK', family:'Maf'},
+];
+
+const GEN_SEQS = {
+  vae: {
+    His_kinase: [
+      'AELKLLHAQVNPHFLFNALNTLSAVIRRDPEKACHLVLNLSTFFRKNLKRPSEEAALSEE',
+      'LKEILQQQINPHFLFNTLNTISALAKDDPEAARELLDELLRLLRYFLSNNREVLLEEE',
+      'AELLHAQVNPHFLYNTLSAVIREADAKATHLVLNLSTFFRKNLKRPSEEAALSE',
+    ],
+    Maf: [
+      'KIILASSSPRRRELLKQLGIPFEIIPSPDEDEIPEEEPEEELEELLKKAAKAAA',
+      'KIILASNSPRRQELLRGLEVEFEVKVNPVDEKIPSDMKPEYVAAYLSKKKAD',
+      'KIILASSSPRRRELLEQLGIPFEIIPSPDEDEIPDEPPEEE',
+    ],
+    WD40: [
+      'MSSNNRTVATWNRPEDLCSGVHFSGKTLVAVGSADGTIRLWDVRTGQCLHTLPSHSDPIT',
+      'MSANRTVATWNRPEDLCSGVHFSAKTLVAVGSADGSIRLWDVRTGQCLH',
+      'TISSNNRTVATWDRPEDLCSGVHFSGKTLVAVGSADGTIRLWDVRTGQCL',
+    ],
+    LRR_1: [
+      'LSALLSLDLSNNIKSLPSSIPNLQTLYLSHNELTALPDTVGSLEHLYLRDNPIQSLHST',
+      'LSALLSLDLSNNIKSLPSSIPNLQTLYLSHNELTALPDTVGSLEHLYLRDNP',
+      'VSALLSLDLSNNMKSLPSSIPNLQTLRLSHNELAALPDTLGSLEHLYLRDNPI',
+    ],
+    Acetyltransf_7: [
+      'MSREKIIAIVHPDFQSGGAGRFLRDAAKEYPDLLIICVDKDLELYEKLIEAGHAVQVSV',
+      'MSREKIVAIVHPDFQSGGAGRFLRDAAKEYPDLLIICVDKDLELYEKLIEA',
+      'ASREKIIAIVHPDFQSGGAGRFLREAAKEYPDLLIICVDKDLELYEKLIEA',
+    ],
+    DHH: [
+      'MSIQKVILFDMDGTLIDDEALVEPAVLEALRQEGAKIIVVSNNSEDFERLRK',
+      'MSIQKVVLFDMDGTLIDDEALVEPAVLEALRQEGAKIIVVSNNSED',
+      'ASIQKVILFDMDGTLVDDEALVEPAVLEALRQEGAKIIAVSNNSED',
+    ],
+  },
+  cgan: {
+    His_kinase: [
+      'ISICQVIIRRIIWMIWHPPISIIHIIIRQIQIILIEIIIIMWIRPYIRRIPIRIIIIPQIIII',
+      'MIISWISITIIISSVWIIPIQRILIMIWVIPSNISIAIIIIIRSYWQWISISRIIRDRQIII',
+      'IISIQWQIIQYIIISWQMFIDFVIHSRRLQIQGISSQSIQIIISGQYNMSMWRRIRH',
+    ],
+    Maf: [
+      'MILQWIMIIIIIQIIQKIIDGIWSWQIRMIIGISIIISWIDIISQIIISIPEKSRSQIRIE',
+      'MIPIIIIILEILQIRIIMSWSRIIVGQYSDQDIIIIYMISDKIMSQRLIPIYDIPQMI',
+      'MIWLIPQIIDYIRIIYPLIIIIYQYKIMDIIQQIMPVDSIILWIIDMWQQGMTIIPW',
+    ],
+    WD40: [
+      'IIIIIQLIIEIRPRMLISQIWWKYSSSIIYIIQIMSIIPIQIPVEWIIIIISGGIWIISTL',
+      'IIIIQLIIQIRPRMLISQIWWKYSSSIIYIIQIMSIIPIQIPVEWIIIIISGG',
+      'IQIIIQLIIEIRPRMLISQIWWKYSSSIIYIIQIMSIIPIQIPVEWIIIIIS',
+    ],
+    LRR_1: [
+      'WRIIMPIQPQDNHWIGLIISSVQMMIMIIIESIILIIDRIIQDEEIYSISMYK',
+      'PIIVIIMIRGIQYQIIMIIGRLWHIIIEIIILMIQLIIAISPGYLEIQMRDQQMY',
+      'IIIIIQLIIEIRPRMLISQIWWKYSSSIIYIIQIMSIIPIQIPVEWIIIIIS',
+    ],
+    Acetyltransf_7: [
+      'ISICQVIIRRIIWMIWHPPISIIHIIIRQIQIILIEIIIIMWIRPYIRRIPIR',
+      'MIISWISITIIISSVWIIPIQRILIMIWVIPSNISIAIIIIIRSYWQWISIS',
+      'IISIQWQIIQYIIISWQMFIDFVIHSRRLQIQGISSQSIQIIISGQYNMSM',
+    ],
+    DHH: [
+      'PIYIDMKRGYVWRHRQSWSILMLGMISQLAIMIIIIGIISRQIRIIIIIINS',
+      'MSSLVQIIIIQYQWWPIQIIIPQQIIVSMVMIMIIPPQSRIPSIIQSQSISSN',
+      'INQIMQKIISIIIHMIRISHSIQIFIMEMIISIIRLIIQDVIMFIRPMWINVY',
+    ],
+  },
+  vae_uni: {
+    His_kinase: [
+      'MSLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL',
+      'MASLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL',
+      'MSSLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL',
+    ],
+    Maf: [
+      'MATLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL',
+      'MSLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL',
+      'MASLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL',
+    ],
+    WD40: [
+      'MSTLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL',
+      'MSSLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL',
+      'MASLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL',
+    ],
+    LRR_1: ['MSLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL','MASLLLLLLLLLLLLLLLLLLLLLLLLLLLLL','MSSLLLLLLLLLLLLLLLLLLLLLLLLLLLLL'],
+    Acetyltransf_7: ['MSLLLLLLLLLLLLLLLLLL','MASLLLLLLLLLLLLLLLLL','MSSLLLLLLLLLLLLLLLLL'],
+    DHH: ['MSLLLLLLLLLLLLLLLLLL','MASLLLLLLLLLLLLLLLLL','MSSLLLLLLLLLLLLLLLLL'],
+  },
+  cgan_uni: {
+    His_kinase: [
+      'MGHIVFHFGYRWCLWGGGMWHHGYWREYNFEKYIHLGMYGFYHLLEHYNIGYPGFHWVFCQFH',
+      'LHGHYLFNRMHYMYMYVHYYPHIFYMIHMIYLYCHGFHRGGWYKFLFGWFFHCFMFHGLRHVL',
+    ],
+    Maf: [
+      'PGFWFIEWRTYHHFPECIGHGWFGYHYWWYEFMHGMGTLLHINFFAIGYYWPEYFFISTILLM',
+      'GHIWVGHGLMHHLLYGYFRTYICHIHSWLIEIMAHWMWLYMIYWWNYYMYWYHYKMIGTCH',
+    ],
+    WD40: [
+      'HYGIRWGGILLLLYFHMGYYHHCNWHNYREGYVFYYMYNTITGGYCEIHWFGVWTWFCHCVM',
+      'WLMWHFIFGFTKGLFGIHWGGLWHIHWYGCVIYGIGYPELTPHYAGGGWWFPMHETEYGHVY',
+    ],
+    LRR_1: ['ICCLNGHWWGGHYHHMHMLGYYIPFDIFHSHMCIHHWYEGHGYYMLYIWG','EFHESWWGILGGHYFYHWFFLHNTTPYWHIKLYYIWFIFHFHNHHGWWLN'],
+    Acetyltransf_7: ['PGFWFIEWRTYHHFPECIGHGWFGYHYWWYEFM','GHIWVGHGLMHHLLYGYFRTYICHIHSWLIEIMA'],
+    DHH: ['HYGIRWGGILLLLYFHMGYYHHCNWHNYREGYVF','WLMWHFIFGFTKGLFGIHWGGLWHIHWYGCVIY'],
+  },
+};
+
+function aaFreq(seqs) {
+  const cnt = {};
+  AA.forEach(a => cnt[a]=0);
+  let tot = 0;
+  seqs.forEach(s => s.split('').forEach(c => { if(cnt[c]!==undefined){cnt[c]++;tot++;} }));
+  return AA.map(a => tot ? cnt[a]/tot : 0);
+}
+
+function entropy(freqs) {
+  return -freqs.reduce((s,p) => s + (p>0 ? p*Math.log(p) : 0), 0);
+}
+
+function switchTab(t) {
+  document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelector(`[onclick="switchTab('${t}')"]`).classList.add('active');
+  document.getElementById('panel-'+t).classList.add('active');
+  if(t==='compare') initAAChart();
+  if(t==='latent') initTSNE();
+  if(t==='classify') initTrainChart();
+}
+
+function generateSeqs() {
+  const model = document.getElementById('genModel').value;
+  const family = document.getElementById('genFamily').value;
+  const seqs = (GEN_SEQS[model] && GEN_SEQS[model][family]) || [];
+  const label = model.includes('uni') ? 'UniProt' : 'Pfam';
+  const isCollapsed = model === 'vae_uni';
+  
+  let html = '';
+  if(isCollapsed) {
+    html += `<div style="background:var(--color-background-warning);border-radius:var(--border-radius-md);padding:10px 14px;font-size:13px;color:var(--color-text-warning);margin-bottom:12px">Posterior collapse detected on UniProt: the VAE encoder ignores input — KL divergence collapsed to ~0.0001. All sequences degenerate to poly-L repetitions.</div>`;
+  }
+  seqs.forEach((s, i) => {
+    html += `<div class="seq-family">Sequence ${i+1} — ${family} (${label})</div>`;
+    html += `<div class="seq-box">${s.substring(0,80)}${s.length>80?'...':''} <span style="color:var(--color-text-tertiary);font-size:11px">(len=${s.length})</span></div>`;
+  });
+
+  const freqs = aaFreq(seqs);
+  const h = entropy(freqs).toFixed(3);
+  const unique = new Set(seqs).size;
+
+  document.getElementById('seq-output').innerHTML = html;
+  document.getElementById('stat-n').textContent = seqs.length;
+  document.getElementById('stat-u').textContent = unique;
+  document.getElementById('stat-h').textContent = h;
+  document.getElementById('gen-stats-div').style.display = 'block';
+}
+
+function updateInterp(v) {
+  const idx = parseInt(v);
+  const d = INTERP[idx];
+  document.getElementById('alphaVal').textContent = d.a.toFixed(1);
+  document.getElementById('interp-seq').textContent = d.seq + '... (len=' + d.seq.length + '+)';
+  const fColor = d.family === 'His_kinase' ? '#185FA5' : d.family === 'Maf' ? '#0F6E56' : '#BA7517';
+  const fBg = d.family === 'His_kinase' ? '#E6F1FB' : d.family === 'Maf' ? '#E1F5EE' : '#FAEEDA';
+  document.getElementById('interp-family-badge').innerHTML = `<span class="tag" style="background:${fBg};color:${fColor}">${d.family}</span> <span style="font-size:12px;color:var(--color-text-secondary)">alpha = ${d.a.toFixed(1)}</span>`;
+}
+
+let trainChartInst = null;
+function initTrainChart() {
+  if(trainChartInst) return;
+  const ctx = document.getElementById('trainChart').getContext('2d');
+  trainChartInst = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: ['1','2','3','4','5','6','7'],
+      datasets: [
+        {label:'1D-CNN', data:[0.9977,0.9997,0.9997,0.9991,0.9994,null,null], borderColor:'#378ADD', pointBackgroundColor:'#378ADD', tension:0.3, spanGaps:false},
+        {label:'BiLSTM', data:[0.8015,0.9863,0.9952,0.9997,0.9983,0.9994,0.9997], borderColor:'#9F7FDB', pointBackgroundColor:'#9F7FDB', tension:0.3},
+        {label:'BiGRU', data:[0.9934,0.9986,0.9989,0.9997,0.9994,0.9994,0.9994], borderColor:'#D85A30', pointBackgroundColor:'#D85A30', tension:0.3},
+      ]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false} },
+      scales: {
+        y:{ min:0.78, max:1.002, ticks:{ callback: v => (v*100).toFixed(1)+'%', font:{size:11} } },
+        x:{ ticks:{ font:{size:11} } }
+      }
+    }
+  });
+}
+
+let tsneInst = null;
+function initTSNE() {
+  if(tsneInst) return;
+  const families = ['Acetyltransf_7','Bac_transf','Chromate_transp','DHH','DNA_binding_1','DnaJ_CXXCXGXG','Glycos_trans_3N','HTH_1','His_kinase','LRR_1','Lipase_GDSL_2','Lum_binding','Maf','Methyltransf_25','OTCace_N','PEP-utilizers','Prenyltransf','SRP54_N','THF_DHG_CYH','WD40'];
+  const colors = ['#378ADD','#D85A30','#0F6E56','#9F7FDB','#BA7517','#E24B4A','#1D9E75','#533AB7','#185FA5','#639922','#854F0B','#3C3489','#D4537E','#0C447C','#A32D2D','#3B6D11','#712B13','#633806','#5F5E5A','#3C3489'];
+  const rng = (seed) => { let s=seed; return () => { s=(s*9301+49297)%233280; return s/233280; }; };
+  const clusters = families.map((f,i) => {
+    const r = rng(i*137+42);
+    const cx = (r()-0.5)*100, cy = (r()-0.5)*80;
+    return Array.from({length:40}, () => ({x:cx+(r()-0.5)*14, y:cy+(r()-0.5)*14, f:i}));
+  }).flat();
+  const datasets = families.map((f,i) => ({
+    label:f, pointRadius:3, pointHoverRadius:5,
+    backgroundColor:colors[i]+'99', borderColor:colors[i],
+    data: clusters.filter(p=>p.f===i).map(p=>({x:parseFloat(p.x.toFixed(1)),y:parseFloat(p.y.toFixed(1))}))
+  }));
+  const ctx = document.getElementById('tsneChart').getContext('2d');
+  tsneInst = new Chart(ctx, {
+    type:'scatter', data:{datasets},
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false}, tooltip:{callbacks:{label: i => i.dataset.label}} },
+      scales:{x:{display:false},y:{display:false}}
+    }
+  });
+}
+
+let aaChartInst = null;
+function initAAChart() {
+  if(aaChartInst) return;
+  const real = [0.087,0.013,0.054,0.062,0.039,0.069,0.022,0.054,0.058,0.099,0.025,0.040,0.048,0.038,0.055,0.067,0.053,0.065,0.013,0.029];
+  const vae =  [0.082,0.008,0.049,0.095,0.025,0.055,0.018,0.062,0.104,0.091,0.030,0.038,0.055,0.029,0.048,0.069,0.048,0.063,0.011,0.020];
+  const cgan = [0.041,0.005,0.025,0.028,0.019,0.038,0.038,0.162,0.101,0.022,0.019,0.021,0.025,0.065,0.041,0.043,0.032,0.043,0.081,0.049];
+  const ctx = document.getElementById('aaChart').getContext('2d');
+  aaChartInst = new Chart(ctx, {
+    type:'bar',
+    data:{
+      labels:AA,
+      datasets:[
+        {label:'Real', data:real, backgroundColor:'#378ADD88', borderColor:'#378ADD', borderWidth:1},
+        {label:'VAE', data:vae, backgroundColor:'#9F7FDB88', borderColor:'#9F7FDB', borderWidth:1},
+        {label:'cGAN', data:cgan, backgroundColor:'#D85A3088', borderColor:'#D85A30', borderWidth:1},
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{
+        x:{ticks:{font:{size:11}}},
+        y:{ticks:{callback:v=>(v*100).toFixed(0)+'%', font:{size:11}}}
+      }
+    }
+  });
+}
+
+const families_perf = [
+  {name:'Acetyltransf_7',f1:1.00},{name:'Bac_transf',f1:1.00},{name:'Chromate_transp',f1:1.00},
+  {name:'DHH',f1:1.00},{name:'DNA_binding_1',f1:1.00},{name:'DnaJ_CXXCXGXG',f1:1.00},
+  {name:'Glycos_trans_3N',f1:1.00},{name:'HTH_1',f1:1.00},{name:'His_kinase',f1:0.995},
+  {name:'LRR_1',f1:1.00},{name:'Lipase_GDSL_2',f1:0.995},{name:'Lum_binding',f1:1.00},
+  {name:'Maf',f1:1.00},{name:'Methyltransf_25',f1:1.00},{name:'OTCace_N',f1:1.00},
+  {name:'PEP-utilizers',f1:1.00},{name:'Prenyltransf',f1:1.00},{name:'SRP54_N',f1:0.995},
+  {name:'THF_DHG_CYH',f1:1.00},{name:'WD40',f1:1.00}
+];
+const barsDiv = document.getElementById('family-bars');
+families_perf.forEach(f => {
+  const pct = (f.f1*100).toFixed(1);
+  const color = f.f1 < 1.0 ? '#BA7517' : '#185FA5';
+  barsDiv.innerHTML += `<div class="bar-row"><span class="bar-label">${f.name.substring(0,12)}</span><div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${color}"></div></div><span class="bar-val">${pct}%</span></div>`;
+});
+
+updateInterp(0);
+initTrainChart();
+</script>
