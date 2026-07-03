@@ -1,5 +1,5 @@
 # MakersMart — Final Year Project (Team Lead)
-**Subject:** BCA Final Year Project | Dona Bosco College, Goa
+**Subject:** BCA Final Year Project | Don Bosco College, Goa
 
 ## Summary
 MakersMart is an online platform designed to support and empower artisans and hobbyists, particularly women working from home. It gives artisans a dedicated space to create personalized profiles, showcase their portfolios, and sell handmade products directly to customers — combining personal branding with e-commerce. The platform also includes skill-learning sessions and direct communication between artisans and customers to foster a supportive creative community.
