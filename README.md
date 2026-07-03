@@ -15,6 +15,7 @@ A collection of semester projects across statistics, machine learning, NLP, deep
 | 5 | Reinforcement Learning | RL for Protein Folding (HP-Lattice) | Deep RL, based on NeurIPS 2022 paper | [View](./05-Reinforcement-Learning/) · [Live Demo](https://Kowsya.github.io/academic-portfolio/05-Reinforcement-Learning/demo/) |
 | 6 | MLOps | ADAPT-SHIELD — Intrusion Detection Pipeline | Full CI/CD MLOps pipeline, FastAPI, Docker | [View](./06-MLOps/) |
 | 7 | Machine Translation | Hindi-Konkani NMT Evaluation | BLEU benchmarking across 4 platforms | [View](./07-Machine-Translation/) |
+| 8 | BCA Final Year Project | MakersMart | Team lead, full-stack PHP/MySQL platform | [View](./08-MakersMart/) |
 
 ## About this repo
 Each folder contains the project report, code/notebook, and (where applicable) presentation slides or an interactive demo. Read each project's own README for a quick summary before diving into the files.
